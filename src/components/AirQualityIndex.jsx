@@ -10,7 +10,7 @@ const AQIChart = () => {
     const fetchAQI = async () => {
       try {
         setLoading(true); // เริ่มโหลดข้อมูล
-        const response = await fetch("http://localhost:5001/api/modelresults_engvers"); // เปลี่ยนเป็น API endpoint ของคุณ
+        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers"); // เปลี่ยนเป็น API endpoint ของคุณ
         const data = await response.json();
         const latestAQI = data[data.length - 1]?.aqi_class || 0; // ดึงค่า aqi_class ล่าสุด
         setAqi(latestAQI);
