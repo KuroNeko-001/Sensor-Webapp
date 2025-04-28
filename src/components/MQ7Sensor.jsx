@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { io } from "socket.io-client"; // <-- เพิ่ม
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +24,9 @@ ChartJS.register(
   Legend
 );
 
+// สร้าง connection ไปที่ Socket.IO server
+const socket = io("https://server-bo47.onrender.com/");
+
 function MQ7Sensor() {
   const [sensorData, setSensorData] = useState({
     labels: [],
@@ -30,40 +34,26 @@ function MQ7Sensor() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers");
-        const data = await response.json();
-        console.log("Data from API:", data); // Debugging
+    // ฟัง event "sensorData" จาก server
+    socket.on("sensorData", (data) => {
+      console.log("ข้อมูลใหม่จาก socket:", data);
 
-        if (data && data.length > 0) {
-          // Keep only the last 5 entries
-          const recentData = data.slice(-5);
-          const updatedData = {
-            labels: recentData.map((item) =>
-              new Date(item.timestamp).toLocaleTimeString("th-TH", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })
-            ),
-            CO: recentData.map((item) => item.co ?? 0),
-          };
+      const timestamp = new Date(data.timestamp).toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
 
-          setSensorData(updatedData);
-          console.log("Updated sensorData:", updatedData); // Debugging
-        } else {
-          console.error("No data received from API");
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
+      setSensorData((prev) => ({
+        labels: [...prev.labels, timestamp].slice(-5),     // เก็บแค่ 5 ค่าสุดท้าย
+        CO:      [...prev.CO, data.co ?? 0].slice(-5),     // data.co มาจาก server
+      }));
+    });
+
+    // ทำความสะอาด listener เมื่อ component unmount
+    return () => {
+      socket.off("sensorData");
     };
-
-    fetchData();
-    const intervalId = setInterval(fetchData, 60000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   const lineData = {
@@ -99,14 +89,11 @@ function MQ7Sensor() {
       <h2 className="text-xl font-bold text-black">
         ตรวจวัดก๊าซคาร์บอนมอนอกไซด์ (CO)
       </h2>
-      <div
-        className=""
-        style={{ width: "500px", height: "130px", paddingLeft: "100px" }}
-      >
+      <div style={{ width: "500px", height: "130px", paddingLeft: "100px" }}>
         <Line data={lineData} options={lineOptions} />
       </div>
     </div>
   );
 }
 
-export default MQ7Sensor;
+export default MQ7Sensor

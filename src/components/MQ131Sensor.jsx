@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { io } from "socket.io-client"; // <-- นำเข้า Socket.IO
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +24,9 @@ ChartJS.register(
   Legend
 );
 
+// สร้างการเชื่อมต่อ Socket.IO
+const socket = io("https://server-bo47.onrender.com/"); // <-- ระบุ URL ของ server ที่มี Socket.IO
+
 function MQ131Sensor() {
   const [sensorData, setSensorData] = useState({
     labels: [],
@@ -31,45 +35,33 @@ function MQ131Sensor() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers");
-        const data = await response.json();
-        console.log("Data from API:", data); // Debugging
+    // ฟัง event "sensorData" จาก server
+    socket.on("sensorData", (data) => {
+      console.log("ข้อมูลใหม่จาก socket:", data); // ดูข้อมูลที่ส่งมา
 
-        if (data && data.length > 0) {
-          const updatedData = {
-            labels: data
-              .slice(-5) // Keep only the last 5 entries
-              .map((item) =>
-                new Date(item.timestamp).toLocaleTimeString("th-TH", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })
-              ),
-            ozone: data
-              .slice(-5) // Keep only the last 5 entries
-              .map((item) => item.ozone ?? 0),
-            no2: data
-              .slice(-5) // Keep only the last 5 entries
-              .map((item) => item.no2 ?? 0), // Reverse NO2 data to match labels
-          };
+      const timestamp = new Date(data.timestamp).toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
 
-          setSensorData(updatedData);
-          console.log("Updated sensorData:", updatedData); // Debugging
-        } else {
-          console.error("No data received from API");
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
+      setSensorData((prevData) => {
+        const updatedLabels = [...prevData.labels, timestamp].slice(-5); // เก็บแค่ 5 ค่าใหม่ล่าสุด
+        const updatedOzone = [...prevData.ozone, data.ozone ?? 0].slice(-5);
+        const updatedNO2 = [...prevData.no2, data.no2 ?? 0].slice(-5);
+
+        return {
+          labels: updatedLabels,
+          ozone: updatedOzone,
+          no2: updatedNO2,
+        };
+      });
+    });
+
+    // เมื่อ component ถูก unmount ให้หยุดรับข้อมูลจาก socket
+    return () => {
+      socket.off("sensorData");
     };
-
-    fetchData();
-    const intervalId = setInterval(fetchData, 60000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   const lineData = {

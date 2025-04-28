@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { io } from "socket.io-client"; // <-- import socket.io-client
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +24,9 @@ ChartJS.register(
   Legend
 );
 
+// Set up socket connection to the server
+const socket = io("https://server-bo47.onrender.com/");
+
 function BME280Sensor() {
   const [sensorData, setSensorData] = useState({
     labels: [],
@@ -33,42 +37,29 @@ function BME280Sensor() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers");
-        const data = await response.json();
-        console.log("Data from API:", data); // Debugging
+    // Listen to the "sensorData" event from the server
+    socket.on("sensorData", (data) => {
+      console.log("Received data from socket:", data);
 
-        if (data && data.length > 0) {
-          const recentData = data.slice(-5); // เลือกเฉพาะ 5 ตัวล่าสุด
-          const updatedData = {
-            labels: recentData.map((item) =>
-              new Date(item.timestamp).toLocaleTimeString("th-TH", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })
-            ),
-            temperature: recentData.map((item) => item.temperature ?? 0),
-            humidity: recentData.map((item) => item.humidity ?? 0),
-            latestTemperature: recentData[recentData.length - 1]?.temperature ?? 0,
-            latestHumidity: recentData[recentData.length - 1]?.humidity ?? 0,
-          };
+      const timestamp = new Date(data.timestamp).toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
 
-          setSensorData(updatedData);
-          console.log("Updated sensorData:", updatedData); // Debugging
-        } else {
-          console.error("No data received from API");
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
+      setSensorData((prev) => ({
+        labels: [...prev.labels, timestamp].slice(-5), // Keep only the last 5 entries
+        temperature: [...prev.temperature, data.temperature ?? 0].slice(-5),
+        humidity: [...prev.humidity, data.humidity ?? 0].slice(-5),
+        latestTemperature: data.temperature ?? 0,
+        latestHumidity: data.humidity ?? 0,
+      }));
+    });
+
+    // Cleanup the socket listener when the component unmounts
+    return () => {
+      socket.off("sensorData");
     };
-
-    fetchData();
-    const intervalId = setInterval(fetchData, 60000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   const lineData = {
@@ -117,7 +108,7 @@ function BME280Sensor() {
 
   return (
     <div
-      className="font-kanit bg-white  shadow-md rounded-lg"
+      className="font-kanit bg-white shadow-md rounded-lg"
       style={{
         paddingTop: "10px",
         paddingLeft: "20px",
@@ -125,21 +116,15 @@ function BME280Sensor() {
         paddingBottom: "20px",
       }}
     >
-      {" "}
-      {/* กำหนดความกว้างเป็น full */}
-      <h2 className="text-xl text-green-20 ">BME280 Sensor</h2>
+      <h2 className="text-xl text-green-20">BME280 Sensor</h2>
       <h2 className="text-xl font-bold text-black mb-5">
         วัดอุณหภูมิ และ ความชื้นในอากาศ
       </h2>
-      <div className="" style={{ width: "450px", height: "200px" }}>
-        {" "}
-        {/* กำหนดความสูงของกราฟ */}
+      <div style={{ width: "450px", height: "200px" }}>
         <Line data={lineData} options={lineOptions} />
       </div>
-      <div className="flex justify-around ">
+      <div className="flex justify-around">
         <div className="relative h-36 w-36">
-          {" "}
-          {/* กำหนดขนาดของ Doughnut */}
           <Doughnut
             data={doughnutData(
               sensorData.latestTemperature,
@@ -149,14 +134,10 @@ function BME280Sensor() {
             options={doughnutOptions}
           />
           <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-lg font-bold">
-              {sensorData.latestTemperature}°C
-            </p>
+            <p className="text-lg font-bold">{sensorData.latestTemperature}°C</p>
           </div>
         </div>
         <div className="relative h-36 w-36">
-          {" "}
-          {/* กำหนดขนาดของ Doughnut */}
           <Doughnut
             data={doughnutData(
               sensorData.latestHumidity,

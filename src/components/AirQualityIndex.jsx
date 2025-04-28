@@ -1,31 +1,14 @@
 import React, { useState, useEffect } from "react";
+import { io } from "socket.io-client";
+
+const socket = io("https://server-bo47.onrender.com/"); 
 
 const AQIChart = () => {
-  const [aqi, setAqi] = useState(null); // เก็บค่า AQI
-  const [aqiLevel, setAqiLevel] = useState({ color: "", text: "" }); // เก็บระดับ AQI
-  const [loading, setLoading] = useState(true); // สถานะ loading
+  const [aqi, setAqi] = useState(null);
+  const [aqiLevel, setAqiLevel] = useState({ color: "", text: "" });
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Fetch AQI data จาก API
-    const fetchAQI = async () => {
-      try {
-        setLoading(true); // เริ่มโหลดข้อมูล
-        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers"); // เปลี่ยนเป็น API endpoint ของคุณ
-        const data = await response.json();
-        const latestAQI = data[data.length - 1]?.aqi_class || 0; // ดึงค่า aqi_class ล่าสุด
-        setAqi(latestAQI);
-        updateAqiLevel(latestAQI); // อัปเดตระดับ AQI
-      } catch (error) {
-        console.error("Error fetching AQI data:", error);
-      } finally {
-        setLoading(false); // โหลดข้อมูลเสร็จสิ้น
-      }
-    };
-
-    fetchAQI();
-  }, []);
-
-  // ฟังก์ชันสำหรับอัปเดตระดับ AQI
+  
   const updateAqiLevel = (value) => {
     if (value <= 0) {
       setAqiLevel({ color: "bg-green-200", text: "Good" });
@@ -43,19 +26,50 @@ const AQIChart = () => {
     }
   };
 
+  useEffect(() => {
+    
+    const fetchAQI = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(
+          "https://server-bo47.onrender.com/api/modelresults_engvers"
+        );
+        const data = await res.json();
+        const latest = data[data.length - 1]?.aqi_class ?? 0;
+        setAqi(latest);
+        updateAqiLevel(latest);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAQI();
+
+    
+    socket.on("modelResult", (result) => {
+      setLoading(false);
+      const v = result.aqi_class;
+      setAqi(v);
+      updateAqiLevel(v);
+    });
+
+    return () => {
+      socket.off("modelResult");
+    };
+  }, []);
+
   return (
     <div
       className="font-kanit bg-white rounded-lg shadow-md"
       style={{
-        paddingTop: "10px",
-        paddingLeft: "20px",
-        paddingRight: "10px",
-        paddingBottom: "20px",
+        padding: "10px 20px 20px",
         marginBottom: "230px",
       }}
     >
       <h2 className="text-xl text-green-20">AQI ระดับคุณภาพในอากาศ</h2>
       <h2 className="text-xl text-black">Air Quality Index</h2>
+
       {loading ? (
         <div className="my-4 text-gray-600 font-bold">Loading...</div>
       ) : (
@@ -63,9 +77,12 @@ const AQIChart = () => {
           className={`my-4 border font-bold border-gray-300 rounded-lg p-4 ${aqiLevel.color}`}
         >
           <p className="text-gray-600">{aqiLevel.text}</p>
+          <p className="text-2xl font-extrabold">AQI: {aqi}</p>
         </div>
       )}
-      <div className="mt-4">
+
+      
+      <div className="mt-4 flex flex-wrap gap-2">
         <button className="bg-green-200 text-gray-800 font-bold py-2 px-4 rounded">
           Good
         </button>
@@ -75,9 +92,11 @@ const AQIChart = () => {
         <button className="bg-orange-200 text-gray-800 font-bold py-2 px-4 rounded">
           Unhealthy for Sensitive Groups
         </button>
-        <br />
-        <button className="bg-red-200 text-gray-800 font-bold py-2 px-4 rounded mt-2">
+        <button className="bg-red-200 text-gray-800 font-bold py-2 px-4 rounded">
           Unhealthy
+        </button>
+        <button className="bg-purple-200 text-gray-800 font-bold py-2 px-4 rounded">
+          Very Unhealthy
         </button>
       </div>
     </div>

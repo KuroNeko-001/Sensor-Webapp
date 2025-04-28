@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Line } from "react-chartjs-2";
+import { io } from "socket.io-client";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +13,7 @@ import {
   Legend,
 } from "chart.js";
 
+// Register ChartJS modules
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -30,41 +32,45 @@ function SDS011Sensor() {
     PM10: [],
   });
 
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers");
-        const data = await response.json();
-        console.log("Data from API:", data); // Debugging
+    const socket = io("https://server-bo47.onrender.com/"); // เชื่อมต่อ socket
 
-        if (data && data.length > 0) {
-          const recentData = data.slice(-5);
-          const updatedData = {
-            labels: recentData.map((item) =>
-              new Date(item.timestamp).toLocaleTimeString("th-TH", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })
-            ),
-            PM2_5: recentData.map((item) => item.pm2_5 ?? 0),
-            PM10: recentData.map((item) => item.pm10 ?? 0),
+    socket.on("connect", () => {
+      console.log("Connected to server via Socket.IO");
+    });
+
+    socket.on("sensorData", (data) => {
+      console.log("Received real-time data:", data);
+
+      if (data) {
+        const timestamp = new Date(data.timestamp).toLocaleTimeString("th-TH", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+
+        setSensorData((prevData) => {
+          const newLabels = [...prevData.labels, timestamp].slice(-5); // เก็บเวลาแค่ 5 ตัวล่าสุด
+          const newPM2_5 = [...prevData.PM2_5, data.pm2_5 ?? 0].slice(-5); // เก็บค่า PM2.5 ล่าสุด 5 ตัว
+          const newPM10 = [...prevData.PM10, data.pm10 ?? 0].slice(-5); // เก็บค่า PM10 ล่าสุด 5 ตัว
+
+          return {
+            labels: newLabels,
+            PM2_5: newPM2_5,
+            PM10: newPM10,
           };
-
-          setSensorData(updatedData);
-          console.log("Updated sensorData:", updatedData); // Debugging
-        } else {
-          console.error("No data received from API");
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
+        });
       }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Disconnected from server");
+    });
+
+    return () => {
+      socket.disconnect(); // cleanup ตอน unmount
     };
-
-    fetchData();
-    const intervalId = setInterval(fetchData, 60000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   const lineData = {
@@ -104,16 +110,13 @@ function SDS011Sensor() {
     >
       <h2 className="text-xl text-green-20">SDS011 Sensor</h2>
       <h2 className="text-xl font-bold text-black">
-        ตรวจค่าฝุ่น PM2.5 และ PM10
+        ตรวจค่าฝุ่น PM2.5 และ PM10 (Real-Time)
       </h2>
-      <div
-        className=""
-        style={{ width: "500px", height: "180px", paddingLeft: "70px" }}
-      >
+      <div style={{ width: "500px", height: "180px", paddingLeft: "70px" }}>
         <Line data={lineData} options={lineOptions} />
       </div>
     </div>
   );
 }
 
-export default SDS011Sensor;
+export default SDS011Sensor

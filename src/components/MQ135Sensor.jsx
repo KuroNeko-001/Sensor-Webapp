@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { io } from "socket.io-client"; // <-- เพิ่มตรงนี้
 
 ChartJS.register(
   CategoryScale,
@@ -23,50 +24,40 @@ ChartJS.register(
   Legend
 );
 
+const socket = io("https://server-bo47.onrender.com/"); // <-- Connect socket server
+
 function MQ135Sensor() {
   const [sensorData, setSensorData] = useState({
     labels: [],
-    SO2:[],
+    SO2: [],
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("https://server-bo47.onrender.com/api/modelresults_engvers");
-        const data = await response.json();
-        console.log("Data from API:", data); // Debugging
+    // ฟัง event "sensorData" จาก server
+    socket.on("sensorData", (data) => {
+      console.log("ข้อมูลใหม่จาก socket:", data);
 
-        if (data && data.length > 0) {
-          const updatedData = {
-            labels: data
-              .slice(-5)
-              .map((item) =>
-                new Date(item.timestamp).toLocaleTimeString("th-TH", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })
-              ),
+      const timestamp = new Date(data.timestamp).toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
 
-            SO2: data
-              .slice(-5)
-              .map((item) => item.so2 ?? 0), // Reverse SO2 data to match labels
-          };
+      setSensorData((prevData) => {
+        const newLabels = [...prevData.labels, timestamp].slice(-5);
+        const newSO2 = [...prevData.SO2, data.so2 ?? 0].slice(-5);
 
-          setSensorData(updatedData);
-          console.log("Updated sensorData:", updatedData); // Debugging
-        } else {
-          console.error("No data received from API");
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
+        return {
+          labels: newLabels,
+          SO2: newSO2,
+        };
+      });
+    });
+
+    // ตอน component unmount ให้ปิด socket listener
+    return () => {
+      socket.off("sensorData");
     };
-
-    fetchData();
-    const intervalId = setInterval(fetchData, 60000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   const lineData = {
@@ -99,11 +90,8 @@ function MQ135Sensor() {
       }}
     >
       <h2 className="text-xl text-green-20">MQ135 Sensor</h2>
-      <h2 className="text-xl font-bold text-black">
-      ค่าซัลเฟอร์ไดออกไซด์ (SO2)
-      </h2>
+      <h2 className="text-xl font-bold text-black">ค่าซัลเฟอร์ไดออกไซด์ (SO2)</h2>
       <div
-        className=""
         style={{ width: "450px", height: "180px", paddingLeft: "50px" }}
       >
         <Line data={lineData} options={lineOptions} />
