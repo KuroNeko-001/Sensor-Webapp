@@ -10,7 +10,7 @@ import TotalAir from './components/TotalAirQuality';
 function App() {
   return (
     <div className="flex font-inter bg-blue-10">
-      <div className="bg-green-10 w-40"></div> {/* เปลี่ยน p-20 เป็น w-20 */}
+      
       <div className="flex-1">
         <div className="flex items-center ">
           <h1 className="font-inter text-black-10 font-bold ml-7 mr-5">Dashboard</h1>
